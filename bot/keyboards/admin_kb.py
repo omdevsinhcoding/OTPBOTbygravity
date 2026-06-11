@@ -109,7 +109,10 @@ def user_detail_keyboard(user: User) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="🔓 Unban User", callback_data=f"admin:unban:{user.id}"),
         ])
 
-    buttons.append([InlineKeyboardButton(text="◀️ Back", callback_data="admin:users:all")])
+    buttons.append([
+        InlineKeyboardButton(text="◀️ Back", callback_data="admin:users:all"),
+        InlineKeyboardButton(text="🏠 Admin Home", callback_data="admin:home")
+    ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

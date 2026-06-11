@@ -131,13 +131,12 @@ async def get_matched_sms_for_user(services: list[Service], user_service_ids: se
 
 
 async def get_latest_matched_sms(services: list[Service], user_service_ids: set[int]) -> Optional[ParsedSMS]:
-    """Fetch latest SMS and return only if it matches user's assigned services."""
-    sms_data = await fetch_latest_sms()
-    if not sms_data:
-        return None
-    parsed = classify_sms(sms_data, services)
-    if parsed.service_id and parsed.service_id in user_service_ids:
-        return parsed
+    """Fetch all SMS and return the most recent one that matches user's assigned services."""
+    all_sms = await fetch_all_sms()
+    for sms_data in all_sms:
+        parsed = classify_sms(sms_data, services)
+        if parsed.service_id and parsed.service_id in user_service_ids and parsed.otp_code:
+            return parsed
     return None
 
 

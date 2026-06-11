@@ -73,6 +73,13 @@ def back_to_menu_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def refresh_status_keyboard() -> InlineKeyboardMarkup:
+    """Refresh status for pending users."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Refresh Status", callback_data="refresh_status")],
+    ])
+
+
 def otp_action_keyboard(otp_text: str, service_name: str) -> InlineKeyboardMarkup:
     """OTP display actions."""
     return InlineKeyboardMarkup(inline_keyboard=[

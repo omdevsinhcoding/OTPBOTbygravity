@@ -22,6 +22,7 @@ from bot.keyboards.user_kb import (
     approved_services_keyboard,
     reapply_keyboard,
     verify_link_keyboard,
+    refresh_status_keyboard,
 )
 from bot.messages.user_msgs import (
     already_verified_message,
@@ -139,7 +140,10 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext):
         return
 
     if user.status == "pending":
-        await message.answer(pending_message())
+        await message.answer(
+            pending_message(),
+            reply_markup=refresh_status_keyboard(),
+        )
         return
 
     if user.status == "declined":
@@ -232,3 +236,65 @@ async def callback_refresh_menu(callback: CallbackQuery, session: AsyncSession):
         reply_markup=approved_services_keyboard(assigned_list),
     )
     await callback.answer("✅ Refreshed!")
+
+
+@router.callback_query(F.data == "refresh_status")
+async def callback_refresh_status(callback: CallbackQuery, session: AsyncSession):
+    """Check approval status without retyping /start."""
+    if not callback.from_user or not callback.message:
+        return
+
+    telegram_id = callback.from_user.id
+    user_repo = UserRepo(session)
+    user = await user_repo.get_by_telegram_id(telegram_id)
+
+    if not user:
+        await callback.answer("⚠️ User not found. Send /start.", show_alert=True)
+        return
+
+    # Check session expiry
+    verification_repo = VerificationRepo(session)
+    latest_session = await verification_repo.get_latest_passed(telegram_id)
+    if _is_session_expired(latest_session.verified_at if latest_session else None):
+        await callback.answer("⏰ Session expired. Send /start to re-verify.", show_alert=True)
+        return
+
+    if user.status == "pending":
+        await callback.answer("⏳ Still pending. Please wait for admin approval.")
+        return
+
+    if user.status == "approved":
+        service_repo = ServiceRepo(session)
+        assigned = await service_repo.get_assigned_services(user.id)
+        assigned_list = list(assigned)
+
+        if not assigned_list:
+            await callback.message.edit_text(
+                "✅ You're approved but no services are assigned yet.\n"
+                "Please wait for the admin to assign services."
+            )
+            return
+
+        await callback.message.edit_text(
+            service_menu_header(),
+            reply_markup=approved_services_keyboard(assigned_list),
+        )
+        await callback.answer("🎉 Approved! Menu loaded.")
+        return
+
+    if user.status == "declined":
+        settings_repo = SettingsRepo(session)
+        decline_msg = await settings_repo.get("decline_message") or ""
+        await callback.message.edit_text(
+            declined_message(decline_msg),
+            reply_markup=reapply_keyboard(),
+        )
+        await callback.answer("❌ Request declined.")
+        return
+
+    if user.status == "banned":
+        settings_repo = SettingsRepo(session)
+        ban_msg = await settings_repo.get("ban_message") or ""
+        await callback.message.edit_text(banned_message(ban_msg))
+        await callback.answer("🚫 Account banned.")
+        return
