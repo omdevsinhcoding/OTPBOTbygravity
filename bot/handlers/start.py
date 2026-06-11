@@ -180,6 +180,36 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
         return
 
 
+@router.message(CommandStart())
+async def cmd_start(message: Message, session: AsyncSession, state: FSMContext):
+    """Main entry point — verification gate → routing."""
+    if not message.from_user:
+        return
+
+    telegram_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name or "there"
+
+    await _process_start(message, telegram_id, username, first_name, session, state)
+
+
+@router.callback_query(F.data == "restart_bot")
+async def callback_restart_bot(callback: CallbackQuery, session: AsyncSession, state: FSMContext):
+    """Restart bot from an inline button."""
+    if not callback.message or not callback.from_user:
+        return
+        
+    await callback.message.delete()
+    
+    telegram_id = callback.from_user.id
+    username = callback.from_user.username
+    first_name = callback.from_user.first_name or "there"
+    
+    # Process start using the callback's message context so it sends a new message to the chat
+    await _process_start(callback.message, telegram_id, username, first_name, session, state)
+    await callback.answer()
+
+
 @router.callback_query(F.data == "main_menu")
 async def callback_main_menu(callback: CallbackQuery, session: AsyncSession):
     """Return to main service menu."""
