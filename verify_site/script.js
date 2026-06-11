@@ -280,6 +280,8 @@ function onRecaptchaError() {
 // STEP 3: SUBMIT VERIFICATION
 // ═══════════════════════════════
 
+let botUsername = null; // Set by API response
+
 async function submitVerification() {
     if (!recaptchaToken) {
         showCaptchaStatus('Please complete the reCAPTCHA first.');
@@ -309,6 +311,10 @@ async function submitVerification() {
         const data = await resp.json();
 
         if (data.success) {
+            // Get bot username from response (if provided)
+            if (data.bot_username) {
+                botUsername = data.bot_username;
+            }
             showSuccess();
         } else {
             showError(data.error || 'Verification failed. Please try again.');
@@ -335,6 +341,41 @@ function showStep(stepEl) {
 
 function showSuccess() {
     showStep(stepSuccess);
+
+    // Build Telegram deep link — opens bot and auto-sends /start verified
+    const deepLink = botUsername
+        ? `tg://resolve?domain=${botUsername}&start=verified`
+        : null;
+    const webLink = botUsername
+        ? `https://t.me/${botUsername}?start=verified`
+        : null;
+
+    // Set button link
+    const btn = document.getElementById('btn-back-telegram');
+    if (btn && webLink) {
+        btn.href = webLink;
+    }
+
+    // Auto-redirect countdown (3 → 2 → 1 → redirect)
+    let seconds = 3;
+    const countdownEl = document.getElementById('countdown');
+
+    const timer = setInterval(() => {
+        seconds--;
+        if (countdownEl) countdownEl.textContent = seconds;
+
+        if (seconds <= 0) {
+            clearInterval(timer);
+            // Try deep link first (opens native Telegram app)
+            if (deepLink) {
+                window.location.href = deepLink;
+                // Fallback to web link after 1s (in case tg:// doesn't work)
+                setTimeout(() => {
+                    if (webLink) window.location.href = webLink;
+                }, 1000);
+            }
+        }
+    }, 1000);
 }
 
 function showError(msg) {

@@ -56,6 +56,11 @@ async def on_startup():
         await session.commit()
         logger.info(f"✅ Admin users bootstrapped: {settings.admin_id_list}")
 
+    # Get bot username for deep link redirects
+    bot_info = await bot.get_me()
+    settings._bot_username = bot_info.username
+    logger.info(f"🤖 Bot username: @{bot_info.username}")
+
     logger.info("✅ Database ready.")
 
 

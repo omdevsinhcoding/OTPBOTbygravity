@@ -250,9 +250,13 @@ async def submit_verification(request: web.Request) -> web.Response:
 
         await session.commit()
 
+        # Get bot username for deep link redirect
+        bot_username = getattr(settings, '_bot_username', None)
+
         return web.json_response({
             "success": True,
-            "message": "✅ Verification complete! Go back to Telegram.",
+            "message": "Verification complete! Go back to Telegram.",
+            "bot_username": bot_username,
         })
 
 

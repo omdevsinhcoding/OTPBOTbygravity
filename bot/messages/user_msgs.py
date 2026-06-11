@@ -60,8 +60,8 @@ def ask_full_name() -> str:
     return (
         "📋 <b>Registration — Step 1/3</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "👤 Please enter your <b>full name</b>:\n\n"
-        "<i>Example: Avneet Singh</i>"
+        "👤 Please enter your <b>Full Name</b>:\n\n"
+        "<i>Type your name below to continue.</i>"
     )
 
 
@@ -70,7 +70,7 @@ def ask_whatsapp() -> str:
         "📋 <b>Registration — Step 2/3</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "📱 Please enter your <b>WhatsApp number</b>:\n\n"
-        "<i>Example: +91 98765 43210</i>"
+        "<i>Include country code (e.g., +1 234 567 8900)</i>"
     )
 
 

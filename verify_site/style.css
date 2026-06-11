@@ -426,6 +426,11 @@ body {
 
 .btn-premium.hidden { display: none; }
 
+a.btn-premium {
+    text-decoration: none;
+    margin-bottom: 16px;
+}
+
 .btn-green {
     background: linear-gradient(135deg, var(--green), #16a34a);
     box-shadow: 0 4px 24px var(--green-glow), inset 0 1px 0 rgba(255,255,255,0.1);

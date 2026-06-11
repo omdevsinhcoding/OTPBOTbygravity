@@ -72,6 +72,13 @@ async def _send_verification(message: Message, session: AsyncSession, telegram_i
     )
 
 
+@router.message(CommandStart(deep_link=True))
+async def cmd_start_deeplink(message: Message, session: AsyncSession, state: FSMContext, command: CommandStart):
+    """Handle /start with deep link (e.g., /start verified from auto-redirect)."""
+    # Process same as regular /start — the deep link just triggers the flow automatically
+    await cmd_start(message, session, state)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession, state: FSMContext):
     """Main entry point — verification gate → routing."""
