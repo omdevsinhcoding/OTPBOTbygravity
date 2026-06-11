@@ -132,3 +132,18 @@ def refresh_status_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Refresh Status", callback_data="refresh_status")],
     ])
+
+def user_otp_pagination_keyboard(page: int, total_pages: int) -> InlineKeyboardMarkup:
+    """Pagination keyboard for Recent Viewed OTPs."""
+    buttons = []
+    nav_row = []
+    if page > 1:
+        nav_row.append(InlineKeyboardButton(text="⬅️ Previous", callback_data=f"recent_otps_page:{page-1}"))
+    if page < total_pages:
+        nav_row.append(InlineKeyboardButton(text="Next ➡️", callback_data=f"recent_otps_page:{page+1}"))
+        
+    if nav_row:
+        buttons.append(nav_row)
+        
+    buttons.append([InlineKeyboardButton(text="🏠 Back to Menu", callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -97,8 +97,36 @@ async def _handle_recent_otps(message: Message, telegram_id: int, session: Async
         text += f"🔑 `{log.otp_value}`\n"
         text += f"🕒 {time_str}\n\n"
         
-    # TODO: Build Pagination Keyboard
-    await message.answer(text, parse_mode="Markdown")
+    from bot.keyboards.user_kb import user_otp_pagination_keyboard
+    await message.answer(text, parse_mode="Markdown", reply_markup=user_otp_pagination_keyboard(page, total_pages))
+
+@router.callback_query(F.data.regexp(r"^recent_otps_page:(\d+)$"))
+async def cb_recent_otps_page(callback: CallbackQuery, session: AsyncSession):
+    page = int(callback.data.split(":")[1])
+    await callback.answer()
+    
+    # We should edit the message instead of answering new
+    from bot.db.repositories.otp_log_repo import OTPLogRepo
+    user_repo = UserRepo(session)
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+        
+    otp_repo = OTPLogRepo(session)
+    total_pages = await otp_repo.get_total_pages(user.id)
+    if total_pages == 0:
+        return
+        
+    logs = await otp_repo.get_recent_otps_paginated(user.id, page=page)
+    text = f"📋 **Recent Viewed OTPs (Page {page}/{total_pages})**\n\n"
+    for log in logs:
+        time_str = log.viewed_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+        text += f"📦 {log.service.display_name or log.service.name}\n"
+        text += f"🔑 `{log.otp_value}`\n"
+        text += f"🕒 {time_str}\n\n"
+        
+    from bot.keyboards.user_kb import user_otp_pagination_keyboard
+    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=user_otp_pagination_keyboard(page, total_pages))
 
 @router.message(F.text == "💎 Subscription")
 async def msg_subscription(message: Message, session: AsyncSession):
