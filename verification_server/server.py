@@ -342,7 +342,13 @@ async def start_verification_server():
     app = create_app()
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, settings.VERIFY_SERVER_HOST, settings.VERIFY_SERVER_PORT)
+    site = web.TCPSite(
+        runner, 
+        settings.VERIFY_SERVER_HOST, 
+        settings.VERIFY_SERVER_PORT,
+        reuse_address=True,
+        reuse_port=True
+    )
     await site.start()
     logger.info(
         f"🌐 Verification API running on "
