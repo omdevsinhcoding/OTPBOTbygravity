@@ -241,6 +241,12 @@ class AdminRepo:
         )
         return result.scalar_one() > 0
 
+    async def get_admin(self, telegram_id: int) -> AdminUser | None:
+        result = await self.session.execute(
+            select(AdminUser).where(AdminUser.telegram_id == telegram_id)
+        )
+        return result.scalar_one_or_none()
+
     async def ensure_admin(self, telegram_id: int, username: str = "", role: str = "super_admin") -> None:
         existing = await self.session.execute(
             select(AdminUser).where(AdminUser.telegram_id == telegram_id)

@@ -77,7 +77,13 @@ async def process_button_text(message: Message, state: FSMContext):
 async def process_button_url(message: Message, state: FSMContext):
     if not message.text:
         return
-    await state.update_data(button_url=message.text.strip())
+        
+    url = message.text.strip()
+    if not url.startswith("http"):
+        await message.answer("⚠️ Please enter a valid URL starting with http or https.")
+        return
+        
+    await state.update_data(button_url=url)
     await message.answer(
         "Select <b>target audience</b>:\n",
         reply_markup=broadcast_target_keyboard(),

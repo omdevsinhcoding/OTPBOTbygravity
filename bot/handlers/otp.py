@@ -76,9 +76,6 @@ async def handle_get_otp(callback: CallbackQuery, session: AsyncSession):
         })
         return
 
-    # Toast notification
-    await callback.answer("⏳ Fetching OTP...", show_alert=False)
-
     # Log OTP request
     await audit_repo.log(telegram_id, "request_otp", {"service_id": service_id})
 
@@ -113,6 +110,16 @@ async def handle_get_otp(callback: CallbackQuery, session: AsyncSession):
     )
 
     try:
+        from bot.db.repositories.otp_log_repo import OTPLogRepo
+        from bot.db.repositories.settings_repo import SettingsRepo
+        
+        settings_repo = SettingsRepo(session)
+        otp_retention_str = await settings_repo.get("otp_retention_minutes")
+        retention = int(otp_retention_str) if otp_retention_str else 15
+        
+        otp_log_repo = OTPLogRepo(session)
+        await otp_log_repo.log_otp_view(user.id, service_id, sms.otp_code or "Unknown", retention_minutes=retention)
+
         await callback.message.edit_text(
             msg,
             reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
@@ -146,11 +153,6 @@ async def handle_latest_otp(callback: CallbackQuery, session: AsyncSession):
     if not await _check_session(callback, session, telegram_id):
         return
 
-    # Toast notification
-    await callback.answer("⏳ Searching for latest OTP...", show_alert=False)
-
-    await audit_repo.log(telegram_id, "latest_otp")
-
     # Get assigned services
     assigned = await service_repo.get_assigned_services(user.id)
     assigned_ids = {s.id for s in assigned}
@@ -182,11 +184,29 @@ async def handle_latest_otp(callback: CallbackQuery, session: AsyncSession):
     )
 
     try:
+        from bot.db.repositories.otp_log_repo import OTPLogRepo
+        from bot.db.repositories.settings_repo import SettingsRepo
+        
+        settings_repo = SettingsRepo(session)
+        otp_retention_str = await settings_repo.get("otp_retention_minutes")
+        retention = int(otp_retention_str) if otp_retention_str else 15
+        
+        # Determine which service id matched
+        service_id = 0
+        for s in all_services:
+            if s.name == sms.service_name or s.display_name == sms.service_name:
+                service_id = s.id
+                break
+                
+        if service_id:
+            otp_log_repo = OTPLogRepo(session)
+            await otp_log_repo.log_otp_view(user.id, service_id, sms.otp_code or "Unknown", retention_minutes=retention)
+
         await callback.message.edit_text(
             msg,
             reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
         )
-        await callback.answer("✅ OTP fetched!")
+        await callback.answer("✅ Latest OTP fetched!")
     except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
             await callback.answer("⚠️ No new OTPs have arrived yet. This is the latest one.", show_alert=True)

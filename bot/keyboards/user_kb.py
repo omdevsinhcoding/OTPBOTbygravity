@@ -6,17 +6,24 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo, ReplyKeyboardMarkup, KeyboardButton
 from bot.db.models import Service
-
+from bot.utils.callbacks import (
+    MenuCallback, ReqSvcCallback, GetOtpCallback, CopyOtpCallback, PaginationCallback
+)
 
 # ── MAIN MENU KEYBOARDS ──
 
-def main_menu_reply_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
+def main_menu_reply_keyboard(is_admin: bool = False, show_support: bool = True, show_channels: bool = True) -> ReplyKeyboardMarkup:
     """The persistent static keyboard at the bottom."""
     buttons = [
         [KeyboardButton(text="🛒 Request New Service")],
         [KeyboardButton(text="📋 Recent Viewed OTPs"), KeyboardButton(text="💎 Subscription")],
-        [KeyboardButton(text="🆘 Support"), KeyboardButton(text="📢 Our Channels")],
     ]
+    
+    bottom_row = []
+    if show_support: bottom_row.append(KeyboardButton(text="🆘 Support"))
+    if show_channels: bottom_row.append(KeyboardButton(text="📢 Our Channels"))
+    if bottom_row: buttons.append(bottom_row)
+
     if is_admin:
         buttons.append([KeyboardButton(text="👑 Admin Panel")])
         
@@ -27,7 +34,7 @@ def main_menu_reply_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     )
 
 
-def main_menu_inline_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
+def main_menu_inline_keyboard(is_admin: bool = False, show_support: bool = True, show_channels: bool = True) -> InlineKeyboardMarkup:
     """The inline keyboard sent with the welcome message."""
     buttons = [
         [InlineKeyboardButton(text="🛒 Request New Service", callback_data="menu_request_service")],
@@ -35,11 +42,13 @@ def main_menu_inline_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📋 Recent Viewed OTPs", callback_data="menu_recent_otps"),
             InlineKeyboardButton(text="💎 Subscription", callback_data="menu_subscription")
         ],
-        [
-            InlineKeyboardButton(text="🆘 Support", callback_data="menu_support"),
-            InlineKeyboardButton(text="📢 Our Channels", callback_data="menu_channels")
-        ],
     ]
+    
+    bottom_row = []
+    if show_support: bottom_row.append(InlineKeyboardButton(text="🆘 Support", callback_data="menu_support"))
+    if show_channels: bottom_row.append(InlineKeyboardButton(text="📢 Our Channels", callback_data="menu_channels"))
+    if bottom_row: buttons.append(bottom_row)
+
     if is_admin:
         buttons.append([InlineKeyboardButton(text="👑 Admin Panel", callback_data="admin_panel_home")])
         

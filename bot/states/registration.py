@@ -30,10 +30,21 @@ class AdminServiceStates(StatesGroup):
 
 class AdminSettingStates(StatesGroup):
     waiting_value = State()
+    
+    # Support
+    waiting_support_text = State()
+    waiting_support_kb = State()
+    waiting_support_in = State()
+
+    # Channels
     waiting_channel_id = State()
+    waiting_channel_url = State()
+    waiting_channel_name = State()
+    waiting_channel_kb = State()
+    waiting_channel_in = State()
+    
     waiting_ban_message = State()
     waiting_disclaimer = State()
-    waiting_support_text = State()
 
 class AdminApprovalStates(StatesGroup):
     waiting_validity_days = State()

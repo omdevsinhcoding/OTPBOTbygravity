@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from bot.config import settings
 
+from bot.db.repositories.settings_repo import AdminRepo
 
 class AdminGuardMiddleware(BaseMiddleware):
     """
@@ -30,10 +31,20 @@ class AdminGuardMiddleware(BaseMiddleware):
         elif isinstance(event, CallbackQuery) and event.from_user:
             user_id = event.from_user.id
 
-        if user_id and user_id not in settings.admin_id_list:
-            # Silently ignore non-admin access attempts
-            if isinstance(event, CallbackQuery):
-                await event.answer("⛔ Admin access only.", show_alert=True)
+        if not user_id:
             return
 
-        return await handler(event, data)
+        is_super_admin = str(user_id) == str(settings.SUPER_ADMIN_ID)
+        
+        session = data.get("session")
+        if session:
+            admin_repo = AdminRepo(session)
+            db_admin = await admin_repo.get_admin(user_id)
+            if db_admin or is_super_admin:
+                data["admin_user"] = db_admin
+                data["is_super_admin"] = is_super_admin
+                return await handler(event, data)
+
+        if isinstance(event, CallbackQuery):
+            await event.answer("⛔ Admin access only.", show_alert=True)
+        return

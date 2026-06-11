@@ -137,11 +137,23 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
     else:
         welcome_text = welcome_text.replace("{name}", first_name).replace("{username}", username or "User")
 
-    # Send static keyboard first (could be attached to a loading or intro message, but we can just send "Menu loaded" or attach it to the welcome text itself. Wait, we can't attach both to the same message.)
-    # We will send a brief "Loading..." message to set the ReplyKeyboard, then delete it, or just leave it.
-    # Actually, sending a "Keyboard loaded." message that self-deletes is cleaner, or just a small intro text.
-    await message.answer("🔄 Syncing menus...", reply_markup=main_menu_reply_keyboard(is_admin))
-    await message.answer(welcome_text, reply_markup=main_menu_inline_keyboard(is_admin))
+    # ── Visibility Toggles ──
+    support_kb = (await settings_repo.get("support_show_keyboard") or "true") == "true"
+    support_in = (await settings_repo.get("support_show_inline") or "true") == "true"
+    
+    channel = await settings_repo.get_active_channel()
+    channel_kb = channel.show_in_keyboard if channel else False
+    channel_in = channel.show_in_inline if channel else False
+
+    # Send static keyboard first
+    await message.answer(
+        "🔄 Syncing menus...", 
+        reply_markup=main_menu_reply_keyboard(is_admin, show_support=support_kb, show_channels=channel_kb)
+    )
+    await message.answer(
+        welcome_text, 
+        reply_markup=main_menu_inline_keyboard(is_admin, show_support=support_in, show_channels=channel_in)
+    )
 
 
 @router.message(CommandStart())
@@ -199,12 +211,18 @@ async def callback_main_menu(callback: CallbackQuery, session: AsyncSession):
     else:
         welcome_text = welcome_text.replace("{name}", first_name).replace("{username}", username or "User")
 
+    # ── Visibility Toggles ──
+    support_in = (await settings_repo.get("support_show_inline") or "true") == "true"
+    
+    channel = await settings_repo.get_active_channel()
+    channel_in = channel.show_in_inline if channel else False
+
     from aiogram.exceptions import TelegramBadRequest
 
     try:
         await callback.message.edit_text(
             welcome_text,
-            reply_markup=main_menu_inline_keyboard(is_admin),
+            reply_markup=main_menu_inline_keyboard(is_admin, show_support=support_in, show_channels=channel_in),
         )
     except TelegramBadRequest:
         pass

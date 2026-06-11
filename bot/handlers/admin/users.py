@@ -23,9 +23,13 @@ PAGE_SIZE = 10
 
 
 @router.callback_query(F.data == "admin:manage_admins")
-async def manage_admins(callback: CallbackQuery, session: AsyncSession):
+async def manage_admins(callback: CallbackQuery, session: AsyncSession, is_super_admin: bool = False):
     """Show list of admins and allow managing them."""
     if not callback.message:
+        return
+        
+    if not is_super_admin:
+        await callback.answer("⛔ Super Admin access only.", show_alert=True)
         return
         
     from bot.db.repositories.settings_repo import AdminRepo
@@ -48,6 +52,49 @@ async def manage_admins(callback: CallbackQuery, session: AsyncSession):
     from bot.keyboards.admin_kb import admin_back_button
     await callback.message.edit_text(text, reply_markup=admin_back_button(), parse_mode="Markdown")
     await callback.answer()
+
+
+from aiogram.filters import Command
+from aiogram.types import Message
+
+@router.message(Command("add_admin"))
+async def cmd_add_admin(message: Message, session: AsyncSession, is_super_admin: bool = False):
+    """Add a new admin (Super Admin only)."""
+    if not is_super_admin:
+        await message.answer("⛔ Super Admin access only.")
+        return
+        
+    parts = message.text.split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Usage: `/add_admin <telegram_id>`", parse_mode="Markdown")
+        return
+        
+    admin_id = int(parts[1])
+    from bot.db.repositories.settings_repo import AdminRepo
+    admin_repo = AdminRepo(session)
+    await admin_repo.add_admin(admin_id, added_by=message.from_user.id)
+    await session.commit()
+    await message.answer(f"✅ User `{admin_id}` is now a Database Admin.", parse_mode="Markdown")
+
+
+@router.message(Command("remove_admin"))
+async def cmd_remove_admin(message: Message, session: AsyncSession, is_super_admin: bool = False):
+    """Remove an admin (Super Admin only)."""
+    if not is_super_admin:
+        await message.answer("⛔ Super Admin access only.")
+        return
+        
+    parts = message.text.split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Usage: `/remove_admin <telegram_id>`", parse_mode="Markdown")
+        return
+        
+    admin_id = int(parts[1])
+    from bot.db.repositories.settings_repo import AdminRepo
+    admin_repo = AdminRepo(session)
+    await admin_repo.remove_admin(admin_id)
+    await session.commit()
+    await message.answer(f"✅ User `{admin_id}` removed from Admins.", parse_mode="Markdown")
 
 
 @router.callback_query(F.data.regexp(r"^admin:users:(all|verified|pending|declined|banned|approved)(?::(\d+))?$"))
