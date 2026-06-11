@@ -76,6 +76,9 @@ async def handle_get_otp(callback: CallbackQuery, session: AsyncSession):
         })
         return
 
+    # Toast notification
+    await callback.answer("⏳ Fetching OTP...", show_alert=False)
+
     # Log OTP request
     await audit_repo.log(telegram_id, "request_otp", {"service_id": service_id})
 
@@ -85,14 +88,19 @@ async def handle_get_otp(callback: CallbackQuery, session: AsyncSession):
     # Get OTP
     sms = await get_otp_for_service(all_services, service_id)
 
+    from aiogram.exceptions import TelegramBadRequest
+
     if not sms:
         service = await service_repo.get_by_id(service_id)
         svc_name = service.display_name if service else "Unknown"
-        await callback.message.edit_text(
-            no_otp_found(svc_name),
-            reply_markup=back_to_menu_keyboard(),
-        )
-        await callback.answer()
+        try:
+            await callback.message.edit_text(
+                no_otp_found(svc_name),
+                reply_markup=back_to_menu_keyboard(),
+            )
+        except TelegramBadRequest:
+            pass # Already showing this
+        await callback.answer(f"⚠️ No OTP found for {svc_name} yet!", show_alert=True)
         return
 
     msg = otp_display(
@@ -104,11 +112,17 @@ async def handle_get_otp(callback: CallbackQuery, session: AsyncSession):
         otp_code=sms.otp_code or "",
     )
 
-    await callback.message.edit_text(
-        msg,
-        reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
-    )
-    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            msg,
+            reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
+        )
+        await callback.answer("✅ OTP fetched!")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            await callback.answer("⚠️ Still the same OTP. No new messages arrived.", show_alert=True)
+        else:
+            await callback.answer(f"⚠️ Error displaying OTP.", show_alert=True)
 
 
 @router.callback_query(F.data == "latest_otp")
@@ -132,6 +146,9 @@ async def handle_latest_otp(callback: CallbackQuery, session: AsyncSession):
     if not await _check_session(callback, session, telegram_id):
         return
 
+    # Toast notification
+    await callback.answer("⏳ Searching for latest OTP...", show_alert=False)
+
     await audit_repo.log(telegram_id, "latest_otp")
 
     # Get assigned services
@@ -142,12 +159,17 @@ async def handle_latest_otp(callback: CallbackQuery, session: AsyncSession):
     # Fetch latest matched
     sms = await get_latest_matched_sms(all_services, assigned_ids)
 
+    from aiogram.exceptions import TelegramBadRequest
+
     if not sms:
-        await callback.message.edit_text(
-            no_otp_found(),
-            reply_markup=back_to_menu_keyboard(),
-        )
-        await callback.answer()
+        try:
+            await callback.message.edit_text(
+                no_otp_found(),
+                reply_markup=back_to_menu_keyboard(),
+            )
+        except TelegramBadRequest:
+            pass # Already showing this message
+        await callback.answer("⚠️ No recent OTP found!", show_alert=True)
         return
 
     msg = otp_display(
@@ -159,11 +181,17 @@ async def handle_latest_otp(callback: CallbackQuery, session: AsyncSession):
         otp_code=sms.otp_code or "",
     )
 
-    await callback.message.edit_text(
-        msg,
-        reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
-    )
-    await callback.answer()
+    try:
+        await callback.message.edit_text(
+            msg,
+            reply_markup=otp_action_keyboard(sms.otp_code or "", sms.service_name or ""),
+        )
+        await callback.answer("✅ OTP fetched!")
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            await callback.answer("⚠️ No new OTPs have arrived yet. This is the latest one.", show_alert=True)
+        else:
+            await callback.answer(f"⚠️ Error displaying OTP.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("copy_otp:"))
