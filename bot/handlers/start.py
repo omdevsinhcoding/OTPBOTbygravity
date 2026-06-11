@@ -238,10 +238,15 @@ async def callback_main_menu(callback: CallbackQuery, session: AsyncSession):
     assigned = await service_repo.get_assigned_services(user.id)
     assigned_list = list(assigned)
 
-    await callback.message.edit_text(
-        service_menu_header(),
-        reply_markup=approved_services_keyboard(assigned_list),
-    )
+    from aiogram.exceptions import TelegramBadRequest
+
+    try:
+        await callback.message.edit_text(
+            service_menu_header(),
+            reply_markup=approved_services_keyboard(assigned_list),
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
 
 
@@ -263,11 +268,16 @@ async def callback_refresh_menu(callback: CallbackQuery, session: AsyncSession):
     assigned = await service_repo.get_assigned_services(user.id)
     assigned_list = list(assigned)
 
-    await callback.message.edit_text(
-        service_menu_header(),
-        reply_markup=approved_services_keyboard(assigned_list),
-    )
-    await callback.answer("✅ Refreshed!")
+    from aiogram.exceptions import TelegramBadRequest
+
+    try:
+        await callback.message.edit_text(
+            service_menu_header(),
+            reply_markup=approved_services_keyboard(assigned_list),
+        )
+        await callback.answer("✅ Refreshed!")
+    except TelegramBadRequest:
+        await callback.answer("✅ Menu is up to date!")
 
 
 @router.callback_query(F.data == "refresh_status")
@@ -297,23 +307,32 @@ async def callback_refresh_status(callback: CallbackQuery, session: AsyncSession
         await callback.answer("⏳ Still pending. Please wait for admin approval.")
         return
 
+    from aiogram.exceptions import TelegramBadRequest
+
     if user.status == "approved":
         service_repo = ServiceRepo(session)
         assigned = await service_repo.get_assigned_services(user.id)
         assigned_list = list(assigned)
 
         if not assigned_list:
-            await callback.message.edit_text(
-                "✅ You're approved but no services are assigned yet.\n"
-                "Please wait for the admin to assign services."
-            )
+            try:
+                await callback.message.edit_text(
+                    "✅ You're approved but no services are assigned yet.\n"
+                    "Please wait for the admin to assign services."
+                )
+            except TelegramBadRequest:
+                pass
+            await callback.answer("No services assigned yet.")
             return
 
-        await callback.message.edit_text(
-            service_menu_header(),
-            reply_markup=approved_services_keyboard(assigned_list),
-        )
-        await callback.answer("🎉 Approved! Menu loaded.")
+        try:
+            await callback.message.edit_text(
+                service_menu_header(),
+                reply_markup=approved_services_keyboard(assigned_list),
+            )
+            await callback.answer("🎉 Approved! Menu loaded.")
+        except TelegramBadRequest:
+            await callback.answer("✅ Status checked. Menu is loaded.")
         return
 
     if user.status == "declined":
