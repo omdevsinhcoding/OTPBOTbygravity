@@ -159,7 +159,17 @@ async def submit_services(callback: CallbackQuery, state: FSMContext, session: A
     all_services = await service_repo.get_all_active()
     requested = [s for s in all_services if s.id in selected]
 
-    # ── Notify admin ──
+    if not user.is_verified:
+        # User just registered but isn't verified yet
+        # Don't notify admins yet! Send verification link.
+        await callback.message.edit_text(f"✅ Details saved, {full_name}!\n\nOne last step before we notify the admins:")
+        
+        from bot.handlers.start import _send_verification
+        await _send_verification(callback.message, session, telegram_id, full_name)
+        await callback.answer()
+        return
+
+    # ── Notify admin (Only if user is somehow already verified) ──
     admin_text = new_user_request(user, requested)
 
     # Send to all admins

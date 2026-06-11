@@ -250,6 +250,46 @@ async def submit_verification(request: web.Request) -> web.Response:
 
         await session.commit()
 
+        # ── Trigger Admin Notification if User is Fully Registered ──
+        user = await user_repo.get_by_telegram_id(v_session.telegram_id)
+        if user and user.registered_at:
+            from bot.loader import bot
+            from bot.messages.admin_msgs import new_user_request
+            from bot.keyboards.admin_kb import user_detail_keyboard
+            from bot.db.repositories.service_repo import ServiceRepo
+            
+            service_repo = ServiceRepo(session)
+            all_services = await service_repo.get_all_active()
+            
+            req_ids = [r.service_id for r in user.service_requests]
+            requested = [s for s in all_services if s.id in req_ids]
+            
+            admin_text = new_user_request(user, requested)
+            
+            for admin_id in settings.admin_id_list:
+                try:
+                    await bot.send_message(
+                        admin_id,
+                        admin_text,
+                        reply_markup=user_detail_keyboard(user),
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to notify admin {admin_id} after verification: {e}")
+
+            # Send to private channel
+            from bot.db.repositories.settings_repo import SettingsRepo
+            settings_repo = SettingsRepo(session)
+            channel = await settings_repo.get_active_channel()
+            if channel:
+                try:
+                    await bot.send_message(
+                        channel.channel_id,
+                        admin_text,
+                        reply_markup=user_detail_keyboard(user),
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to post to channel {channel.channel_id} after verification: {e}")
+
         # Get bot username for deep link redirect
         bot_username = getattr(settings, '_bot_username', None)
 

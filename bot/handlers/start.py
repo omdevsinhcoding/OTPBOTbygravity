@@ -116,6 +116,13 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
     if user.telegram_username != username:
         user.telegram_username = username
 
+    # ── Check if User Needs to Register FIRST ──
+    if not user.registered_at:
+        # For new users, we ask for their details BEFORE verification
+        await message.answer(ask_full_name())
+        await state.set_state(RegistrationStates.waiting_full_name)
+        return
+
     # ── Check verification (including 10-min session expiry) ──
     if not user.is_verified:
         await _send_verification(message, session, telegram_id, first_name)
@@ -126,17 +133,12 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
     latest_session = await verification_repo.get_latest_passed(telegram_id)
 
     if _is_session_expired(latest_session.verified_at if latest_session else None):
-        # Session expired — re-verify
-        await message.answer(session_expired_message(), reply_markup=restart_keyboard())
+        # Session expired — just send the verification link automatically (Fixes the loop)
+        await message.answer(session_expired_message())
+        await _send_verification(message, session, telegram_id, first_name)
         return
 
     # ── Verified user — route by status ──
-    if not user.registered_at:
-        # Verified but not registered — show registration form
-        await message.answer(verification_success())
-        await message.answer(ask_full_name())
-        await state.set_state(RegistrationStates.waiting_full_name)
-        return
 
     if user.status == "pending":
         await message.answer(
