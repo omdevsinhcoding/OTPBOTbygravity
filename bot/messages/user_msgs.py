@@ -52,7 +52,7 @@ def verification_failed() -> str:
         "• Location permission was denied\n"
         "• Captcha answer was incorrect\n"
         "• Session expired\n\n"
-        "<i>Please try again by sending /start</i>\n"
+        "<i>Tap the button below to restart.</i>\n"
     )
 
 
@@ -194,8 +194,8 @@ def session_expired_message() -> str:
         "Your verification session has expired.\n\n"
         "🔐 For security, sessions are only valid\n"
         "for <b>10 minutes</b>.\n\n"
-        "Please complete verification again\n"
-        "to continue using the bot 👇\n"
+        "Tap the button below to restart\n"
+        "and verify again 👇\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 

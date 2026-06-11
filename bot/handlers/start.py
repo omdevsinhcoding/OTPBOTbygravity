@@ -76,20 +76,18 @@ async def _send_verification(message: Message, session: AsyncSession, telegram_i
 @router.message(CommandStart(deep_link=True))
 async def cmd_start_deeplink(message: Message, session: AsyncSession, state: FSMContext, command: CommandStart):
     """Handle /start with deep link (e.g., /start verified from auto-redirect)."""
-    # Process same as regular /start — the deep link just triggers the flow automatically
-    await cmd_start(message, session, state)
-
-
-@router.message(CommandStart())
-async def cmd_start(message: Message, session: AsyncSession, state: FSMContext):
-    """Main entry point — verification gate → routing."""
     if not message.from_user:
         return
-
+        
     telegram_id = message.from_user.id
     username = message.from_user.username
     first_name = message.from_user.first_name or "there"
+    
+    await _process_start(message, telegram_id, username, first_name, session, state)
 
+
+async def _process_start(message: Message, telegram_id: int, username: str | None, first_name: str, session: AsyncSession, state: FSMContext):
+    """Core logic for starting the bot, reusable by commands and callbacks."""
     # Clear any active FSM state
     await state.clear()
 
@@ -127,8 +125,7 @@ async def cmd_start(message: Message, session: AsyncSession, state: FSMContext):
 
     if _is_session_expired(latest_session.verified_at if latest_session else None):
         # Session expired — re-verify
-        await message.answer(session_expired_message())
-        await _send_verification(message, session, telegram_id, first_name)
+        await message.answer(session_expired_message(), reply_markup=restart_keyboard())
         return
 
     # ── Verified user — route by status ──
@@ -200,7 +197,8 @@ async def callback_main_menu(callback: CallbackQuery, session: AsyncSession):
     verification_repo = VerificationRepo(session)
     latest_session = await verification_repo.get_latest_passed(telegram_id)
     if _is_session_expired(latest_session.verified_at if latest_session else None):
-        await callback.answer("⏰ Session expired. Send /start to re-verify.", show_alert=True)
+        await callback.message.edit_text(session_expired_message(), reply_markup=restart_keyboard())
+        await callback.answer()
         return
 
     assigned = await service_repo.get_assigned_services(user.id)
@@ -249,14 +247,16 @@ async def callback_refresh_status(callback: CallbackQuery, session: AsyncSession
     user = await user_repo.get_by_telegram_id(telegram_id)
 
     if not user:
-        await callback.answer("⚠️ User not found. Send /start.", show_alert=True)
+        await callback.message.edit_text(verification_failed(), reply_markup=restart_keyboard())
+        await callback.answer()
         return
 
     # Check session expiry
     verification_repo = VerificationRepo(session)
     latest_session = await verification_repo.get_latest_passed(telegram_id)
     if _is_session_expired(latest_session.verified_at if latest_session else None):
-        await callback.answer("⏰ Session expired. Send /start to re-verify.", show_alert=True)
+        await callback.message.edit_text(session_expired_message(), reply_markup=restart_keyboard())
+        await callback.answer()
         return
 
     if user.status == "pending":

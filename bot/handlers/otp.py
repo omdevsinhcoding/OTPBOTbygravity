@@ -16,9 +16,9 @@ from bot.config import settings
 from bot.db.repositories.service_repo import ServiceRepo
 from bot.db.repositories.settings_repo import AuditRepo, VerificationRepo
 from bot.db.repositories.user_repo import UserRepo
-from bot.keyboards.user_kb import back_to_menu_keyboard, otp_action_keyboard
+from bot.keyboards.user_kb import back_to_menu_keyboard, otp_action_keyboard, restart_keyboard
 from bot.messages.otp_msgs import otp_display
-from bot.messages.user_msgs import no_otp_found
+from bot.messages.user_msgs import no_otp_found, session_expired_message
 from bot.services.sms_parser import get_latest_matched_sms, get_otp_for_service
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,15 @@ async def _check_session(callback: CallbackQuery, session: AsyncSession, telegra
     v_repo = VerificationRepo(session)
     latest = await v_repo.get_latest_passed(telegram_id)
     if not latest or not latest.verified_at:
-        await callback.answer("⏰ Session expired. Send /start to re-verify.", show_alert=True)
+        await callback.message.edit_text(session_expired_message(), reply_markup=restart_keyboard())
+        await callback.answer()
         return False
     verified_at = latest.verified_at
     if verified_at.tzinfo is None:
         verified_at = verified_at.replace(tzinfo=timezone.utc)
     if (datetime.now(timezone.utc) - verified_at) > timedelta(minutes=settings.VERIFY_SESSION_MINUTES):
-        await callback.answer("⏰ Session expired. Send /start to re-verify.", show_alert=True)
+        await callback.message.edit_text(session_expired_message(), reply_markup=restart_keyboard())
+        await callback.answer()
         return False
     return True
 

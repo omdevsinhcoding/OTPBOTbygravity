@@ -80,6 +80,13 @@ def refresh_status_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
+def restart_keyboard() -> InlineKeyboardMarkup:
+    """Restart bot keyboard."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Restart Bot", callback_data="restart_bot")],
+    ])
+
+
 def otp_action_keyboard(otp_text: str, service_name: str) -> InlineKeyboardMarkup:
     """OTP display actions."""
     return InlineKeyboardMarkup(inline_keyboard=[
