@@ -76,7 +76,7 @@ async def _send_verification(message: Message, session: AsyncSession, telegram_i
 
 
 @router.message(CommandStart(deep_link=True))
-async def cmd_start_deeplink(message: Message, session: AsyncSession, state: FSMContext, command: CommandStart):
+async def cmd_start_deeplink(message: Message, session: AsyncSession, state: FSMContext):
     """Handle /start with deep link (e.g., /start verified from auto-redirect)."""
     if not message.from_user:
         return
