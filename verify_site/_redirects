@@ -1,6 +1,6 @@
 # Proxy API calls to VPS (solves HTTPS → HTTP mixed content issue)
 # Browser calls: https://your-app.netlify.app/api/session?token=xxx
-# Netlify proxies to: http://YOUR_VPS_IP:8080/api/session?token=xxx
+# Netlify proxies to: http://161.118.182.184:8080/api/session?token=xxx
 /api/*  http://161.118.182.184:8080/api/:splat  200
 
 # SPA fallback
