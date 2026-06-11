@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -59,13 +60,26 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Async DB URL for SQLAlchemy — prefers DATABASE_URL (Neon)."""
+        """
+        Async DB URL for SQLAlchemy + asyncpg.
+        
+        CRITICAL: asyncpg does NOT understand libpq params like
+        sslmode, channel_binding, etc. We MUST strip them from the URL.
+        SSL is handled separately via connect_args in db/__init__.py.
+        """
         if self.DATABASE_URL:
             url = self.DATABASE_URL
-            # Ensure it uses asyncpg driver
+
+            # Ensure asyncpg driver
             if url.startswith("postgresql://"):
                 url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+
+            # Strip params that asyncpg doesn't understand
+            url = self._strip_libpq_params(url)
             return url
+
         return (
             f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
@@ -73,19 +87,73 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Sync URL for Alembic migrations."""
+        """Sync URL for Alembic migrations (keeps sslmode for psycopg2)."""
         if self.DATABASE_URL:
             url = self.DATABASE_URL
-            # Strip asyncpg driver for sync usage
+            # Ensure plain postgresql:// for sync driver
             if "+asyncpg" in url:
                 url = url.replace("+asyncpg", "")
-            elif url.startswith("postgresql+asyncpg://"):
-                url = url.replace("postgresql+asyncpg://", "postgresql://", 1)
+            if url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql://", 1)
+            # Keep sslmode here — psycopg2 DOES understand it
             return url
         return (
             f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
+
+    @property
+    def is_neon(self) -> bool:
+        """Check if using Neon PostgreSQL (needs SSL)."""
+        return "neon.tech" in self.DATABASE_URL.lower() if self.DATABASE_URL else False
+
+    @property
+    def needs_ssl(self) -> bool:
+        """Check if the connection URL specifies SSL."""
+        if not self.DATABASE_URL:
+            return False
+        return (
+            "sslmode=require" in self.DATABASE_URL.lower()
+            or "ssl=require" in self.DATABASE_URL.lower()
+            or "neon.tech" in self.DATABASE_URL.lower()
+        )
+
+    @staticmethod
+    def _strip_libpq_params(url: str) -> str:
+        """
+        Remove libpq-specific query params that asyncpg doesn't understand.
+        
+        asyncpg crashes on: sslmode, channel_binding, sslcert, sslkey, sslrootcert
+        These are psycopg2/libpq params, NOT asyncpg params.
+        """
+        # Params that asyncpg does NOT accept
+        LIBPQ_ONLY_PARAMS = {
+            "sslmode", "channel_binding", "sslcert", "sslkey",
+            "sslrootcert", "sslcrl", "sslpassword", "gsslib",
+            "krbsrvname", "target_session_attrs",
+        }
+
+        parsed = urlparse(url)
+        query_params = parse_qs(parsed.query, keep_blank_values=True)
+
+        # Remove libpq-only params
+        cleaned = {
+            k: v for k, v in query_params.items()
+            if k.lower() not in LIBPQ_ONLY_PARAMS
+        }
+
+        # Rebuild URL
+        new_query = urlencode(cleaned, doseq=True)
+        cleaned_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment,
+        ))
+
+        return cleaned_url
 
 
 settings = Settings()
