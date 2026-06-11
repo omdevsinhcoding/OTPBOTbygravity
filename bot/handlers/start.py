@@ -312,3 +312,22 @@ async def callback_refresh_status(callback: CallbackQuery, session: AsyncSession
         await callback.message.edit_text(banned_message(ban_msg))
         await callback.answer("🚫 Account banned.")
         return
+
+from aiogram.filters import Command
+@router.message(Command("cancel"))
+async def cmd_cancel(message: Message, state: FSMContext, session: AsyncSession):
+    """Universal FSM cancel fallback."""
+    current_state = await state.get_state()
+    if current_state is None:
+        await message.answer("There is nothing to cancel.")
+        return
+        
+    await state.clear()
+    await message.answer("✅ Cancelled. Returning to main menu.")
+    
+    if not message.from_user: return
+    # Process start again to send main menu
+    telegram_id = message.from_user.id
+    username = message.from_user.username
+    first_name = message.from_user.first_name or "there"
+    await _process_start(message, telegram_id, username, first_name, session, state)

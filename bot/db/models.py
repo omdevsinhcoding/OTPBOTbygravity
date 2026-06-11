@@ -76,6 +76,7 @@ class AdminUser(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="admin", server_default="admin")
+    permissions: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -124,9 +125,13 @@ class UserServiceAssignment(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False)
+    service_name_snapshot: Mapped[str | None] = mapped_column(String(100), nullable=True)
     assigned_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="service_assignments")
     service: Mapped["Service"] = relationship()
@@ -193,6 +198,8 @@ class ChannelSetting(Base):
     channel_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     emoji: Mapped[str] = mapped_column(String(10), default="📢")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    show_in_keyboard: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    show_in_inline: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
 
@@ -207,6 +214,7 @@ class OTPLog(Base):
     service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False)
     otp_value: Mapped[str] = mapped_column(String(50), nullable=False)
     viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship()
     service: Mapped["Service"] = relationship()

@@ -31,6 +31,7 @@ from bot.middlewares.db_session import DbSessionMiddleware
 from bot.middlewares.auth import AdminGuardMiddleware
 from bot.middlewares.throttle import ThrottleMiddleware
 from bot.middlewares.audit import AuditMiddleware
+from bot.middlewares.force_join import ForceJoinMiddleware
 
 from aiogram import Router
 
@@ -80,6 +81,8 @@ async def main():
     dp.callback_query.middleware(ThrottleMiddleware(rate_limit=0.3))
     dp.message.middleware(AuditMiddleware())
     dp.callback_query.middleware(AuditMiddleware())
+    dp.message.middleware(ForceJoinMiddleware())
+    dp.callback_query.middleware(ForceJoinMiddleware())
 
     # ── Admin router with guard ──
     admin_router = Router(name="admin")
