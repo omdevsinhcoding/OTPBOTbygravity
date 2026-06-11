@@ -88,6 +88,11 @@ async def cmd_start_deeplink(message: Message, session: AsyncSession, state: FSM
     await _process_start(message, telegram_id, username, first_name, session, state)
 
 
+from bot.keyboards.user_kb import (
+    main_menu_reply_keyboard,
+    main_menu_inline_keyboard,
+)
+
 async def _process_start(message: Message, telegram_id: int, username: str | None, first_name: str, session: AsyncSession, state: FSMContext):
     """Core logic for starting the bot, reusable by commands and callbacks."""
     # Clear any active FSM state
@@ -96,14 +101,17 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
     user_repo = UserRepo(session)
     ban_repo = BanRepo(session)
     audit_repo = AuditRepo(session)
+    settings_repo = SettingsRepo(session)
+    from bot.db.repositories.settings_repo import AdminRepo
+    admin_repo = AdminRepo(session)
 
     # Log /start action
     await audit_repo.log(telegram_id, "start")
 
     # ── Check ban ──
     if await ban_repo.is_banned(telegram_id):
-        settings_repo = SettingsRepo(session)
-        ban_msg = await settings_repo.get("ban_message") or ""
+        ban_msg = await settings_repo.get("ban_message") or "🚫 You are banned from using this bot."
+        from bot.messages.user_msgs import banned_message
         await message.answer(banned_message(ban_msg))
         return
 
@@ -115,71 +123,25 @@ async def _process_start(message: Message, telegram_id: int, username: str | Non
     # Update username if changed
     if user.telegram_username != username:
         user.telegram_username = username
+        await session.flush()
 
-    # ── Check if User Needs to Register FIRST ──
-    if not user.registered_at:
-        # For new users, we ask for their details BEFORE verification
-        await message.answer(ask_full_name())
-        await state.set_state(RegistrationStates.waiting_full_name)
-        return
+    # ── Check if Admin ──
+    is_super_admin = str(telegram_id) == str(settings.SUPER_ADMIN_ID)
+    is_db_admin = await admin_repo.is_admin(telegram_id)
+    is_admin = is_super_admin or is_db_admin
 
-    # ── Check verification (including 10-min session expiry) ──
-    if not user.is_verified:
-        await _send_verification(message, session, telegram_id, first_name)
-        return
+    # ── Welcome Message ──
+    welcome_text = await settings_repo.get("welcome_message")
+    if not welcome_text:
+        welcome_text = f"👋 Welcome to the Bot, {first_name}!\n\nPlease select an option below:"
+    else:
+        welcome_text = welcome_text.replace("{name}", first_name).replace("{username}", username or "User")
 
-    # Check if verification session expired (10 minutes)
-    verification_repo = VerificationRepo(session)
-    latest_session = await verification_repo.get_latest_passed(telegram_id)
-
-    if _is_session_expired(latest_session.verified_at if latest_session else None):
-        # Session expired — just send the verification link automatically (Fixes the loop)
-        await message.answer(session_expired_message())
-        await _send_verification(message, session, telegram_id, first_name)
-        return
-
-    # ── Verified user — route by status ──
-
-    if user.status == "pending":
-        await message.answer(
-            pending_message(),
-            reply_markup=refresh_status_keyboard(),
-        )
-        return
-
-    if user.status == "declined":
-        settings_repo = SettingsRepo(session)
-        decline_msg = await settings_repo.get("decline_message") or ""
-        await message.answer(
-            declined_message(decline_msg),
-            reply_markup=reapply_keyboard(),
-        )
-        return
-
-    if user.status == "banned":
-        settings_repo = SettingsRepo(session)
-        ban_msg = await settings_repo.get("ban_message") or ""
-        await message.answer(banned_message(ban_msg))
-        return
-
-    if user.status == "approved":
-        # Show service menu
-        service_repo = ServiceRepo(session)
-        assigned = await service_repo.get_assigned_services(user.id)
-        assigned_list = list(assigned)
-
-        if not assigned_list:
-            await message.answer(
-                "✅ You're approved but no services are assigned yet.\n"
-                "Please wait for the admin to assign services."
-            )
-            return
-
-        await message.answer(
-            service_menu_header(),
-            reply_markup=approved_services_keyboard(assigned_list),
-        )
-        return
+    # Send static keyboard first (could be attached to a loading or intro message, but we can just send "Menu loaded" or attach it to the welcome text itself. Wait, we can't attach both to the same message.)
+    # We will send a brief "Loading..." message to set the ReplyKeyboard, then delete it, or just leave it.
+    # Actually, sending a "Keyboard loaded." message that self-deletes is cleaner, or just a small intro text.
+    await message.answer("🔄 Syncing menus...", reply_markup=main_menu_reply_keyboard(is_admin))
+    await message.answer(welcome_text, reply_markup=main_menu_inline_keyboard(is_admin))
 
 
 @router.message(CommandStart())
@@ -219,31 +181,30 @@ async def callback_main_menu(callback: CallbackQuery, session: AsyncSession):
         return
 
     telegram_id = callback.from_user.id
-    user_repo = UserRepo(session)
-    service_repo = ServiceRepo(session)
-    user = await user_repo.get_by_telegram_id(telegram_id)
+    from bot.db.repositories.settings_repo import AdminRepo
+    admin_repo = AdminRepo(session)
+    settings_repo = SettingsRepo(session)
 
-    if not user or user.status != "approved":
-        await callback.answer("⚠️ You don't have access.", show_alert=True)
-        return
+    # ── Check if Admin ──
+    is_super_admin = str(telegram_id) == str(settings.SUPER_ADMIN_ID)
+    is_db_admin = await admin_repo.is_admin(telegram_id)
+    is_admin = is_super_admin or is_db_admin
 
-    # Check session expiry
-    verification_repo = VerificationRepo(session)
-    latest_session = await verification_repo.get_latest_passed(telegram_id)
-    if _is_session_expired(latest_session.verified_at if latest_session else None):
-        await callback.message.edit_text(session_expired_message(), reply_markup=restart_keyboard())
-        await callback.answer()
-        return
-
-    assigned = await service_repo.get_assigned_services(user.id)
-    assigned_list = list(assigned)
+    # ── Welcome Message ──
+    first_name = callback.from_user.first_name or "there"
+    username = callback.from_user.username
+    welcome_text = await settings_repo.get("welcome_message")
+    if not welcome_text:
+        welcome_text = f"👋 Welcome to the Bot, {first_name}!\n\nPlease select an option below:"
+    else:
+        welcome_text = welcome_text.replace("{name}", first_name).replace("{username}", username or "User")
 
     from aiogram.exceptions import TelegramBadRequest
 
     try:
         await callback.message.edit_text(
-            service_menu_header(),
-            reply_markup=approved_services_keyboard(assigned_list),
+            welcome_text,
+            reply_markup=main_menu_inline_keyboard(is_admin),
         )
     except TelegramBadRequest:
         pass

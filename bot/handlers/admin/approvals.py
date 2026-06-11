@@ -137,21 +137,61 @@ async def toggle_service_assignment(callback: CallbackQuery, session: AsyncSessi
     await callback.answer()
 
 
+from aiogram.fsm.context import FSMContext
+from bot.states.registration import AdminApprovalStates
+
 @router.callback_query(F.data.regexp(r"^admin:svc_save:(\d+)$"))
-async def save_service_assignment(callback: CallbackQuery, session: AsyncSession):
-    """Save service assignments and approve user."""
+async def save_service_assignment(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
+    """Prompt for validity days before saving service assignments."""
     if not callback.data or not callback.message or not callback.from_user:
         return
 
     user_id = int(callback.data.split(":")[2])
     admin_id = callback.from_user.id
-    admin_username = callback.from_user.username or str(admin_id)
+
+    key = f"{admin_id}:{user_id}"
+    selected = _assign_selections.get(key, set())
+
+    if not selected:
+        await callback.answer("⚠️ Please select at least one service.", show_alert=True)
+        return
+
+    await state.update_data(assign_user_id=user_id)
+    await callback.message.edit_text(
+        "⏳ **Set Subscription Validity**\n\n"
+        "How many days should these services be valid for?\n"
+        "• Reply with a number (e.g., `30` for 30 days).\n"
+        "• Reply with `0` for **Lifetime** access.",
+        parse_mode="Markdown"
+    )
+    await state.set_state(AdminApprovalStates.waiting_validity_days)
+    await callback.answer()
+
+
+@router.message(AdminApprovalStates.waiting_validity_days)
+async def process_validity_days(message: Message, state: FSMContext, session: AsyncSession):
+    if not message.text:
+        return
+        
+    try:
+        days = int(message.text.strip())
+        if days < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Please enter a valid positive number or 0 for lifetime.")
+        return
+
+    data = await state.get_data()
+    user_id = data.get("assign_user_id")
+    admin_id = message.from_user.id
+    admin_username = message.from_user.username or str(admin_id)
 
     key = f"{admin_id}:{user_id}"
     selected = _assign_selections.pop(key, set())
 
-    if not selected:
-        await callback.answer("⚠️ Please select at least one service.", show_alert=True)
+    if not user_id or not selected:
+        await message.answer("⚠️ Session expired. Please try again.")
+        await state.clear()
         return
 
     user_repo = UserRepo(session)
@@ -162,20 +202,28 @@ async def save_service_assignment(callback: CallbackQuery, session: AsyncSession
 
     user = await user_repo.get_by_id(user_id)
     if not user:
-        await callback.answer("⚠️ User not found.", show_alert=True)
+        await message.answer("⚠️ User not found.")
+        await state.clear()
         return
 
-    # Assign services
-    await service_repo.assign_services(user.id, list(selected), admin_id)
+    from datetime import datetime, timezone, timedelta
+    valid_until = None
+    if days > 0:
+        valid_until = datetime.now(timezone.utc) + timedelta(days=days)
+
+    # Note: service_repo.assign_services doesn't take valid_until directly yet, so we loop over the selected list manually or update it.
+    # We must update assign_services to support valid_until. For now, let's just clear and assign manually.
+    await service_repo.clear_user_assignments(user.id)
+    for sid in selected:
+        await service_repo.assign_service(user.id, sid, admin_id, valid_until)
 
     # Update status to approved
     await user_repo.set_status(user.id, "approved")
 
     # Log approval
-    await approval_repo.log_action(user.id, admin_id, "approved", f"Services: {list(selected)}")
-    await audit_repo.log(admin_id, "admin_approve", {"user_id": user.id, "services": list(selected)})
+    await approval_repo.log_action(user.id, admin_id, "approved", f"Services: {list(selected)} | Days: {days}")
+    await audit_repo.log(admin_id, "admin_approve", {"user_id": user.id, "services": list(selected), "days": days})
 
-    # Get assigned service objects
     assigned = list(await service_repo.get_assigned_services(user.id))
 
     # ── Notify user ──
@@ -199,13 +247,15 @@ async def save_service_assignment(callback: CallbackQuery, session: AsyncSession
         except Exception as e:
             logger.error(f"Failed to post to channel: {e}")
 
-    await callback.message.edit_text(
+    validity_str = "Lifetime" if days == 0 else f"{days} days"
+    await message.answer(
         f"✅ <b>User Approved!</b>\n\n"
         f"👤 {user.full_name} has been approved\n"
-        f"🎬 Services: {', '.join(s.emoji + (s.display_name or s.name) for s in assigned)}\n",
+        f"🎬 Services: {', '.join(s.emoji + (s.display_name or s.name) for s in assigned)}\n"
+        f"⏳ Validity: {validity_str}\n",
         reply_markup=admin_back_button(),
     )
-    await callback.answer("✅ User approved!")
+    await state.clear()
 
 
 @router.callback_query(F.data.regexp(r"^admin:decline:(\d+)$"))

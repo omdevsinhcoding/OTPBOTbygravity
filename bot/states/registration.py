@@ -34,3 +34,6 @@ class AdminSettingStates(StatesGroup):
     waiting_ban_message = State()
     waiting_disclaimer = State()
     waiting_support_text = State()
+
+class AdminApprovalStates(StatesGroup):
+    waiting_validity_days = State()

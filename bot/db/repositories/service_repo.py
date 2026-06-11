@@ -112,6 +112,30 @@ class ServiceRepo:
             )
         await self.session.flush()
 
+    async def clear_user_assignments(self, user_id: int) -> None:
+        """Remove all service assignments for a user."""
+        await self.session.execute(
+            delete(UserServiceAssignment).where(UserServiceAssignment.user_id == user_id)
+        )
+        await self.session.flush()
+
+    async def assign_service(self, user_id: int, service_id: int, admin_id: int, valid_until: datetime | None = None) -> None:
+        """Assign or update a single service for a user, with an optional validity date."""
+        await self.session.execute(
+            delete(UserServiceAssignment)
+            .where(UserServiceAssignment.user_id == user_id)
+            .where(UserServiceAssignment.service_id == service_id)
+        )
+        self.session.add(
+            UserServiceAssignment(
+                user_id=user_id, 
+                service_id=service_id, 
+                assigned_by=admin_id,
+                valid_until=valid_until
+            )
+        )
+        await self.session.flush()
+
     async def get_user_assignments(self, user_id: int) -> Sequence[UserServiceAssignment]:
         result = await self.session.execute(
             select(UserServiceAssignment)

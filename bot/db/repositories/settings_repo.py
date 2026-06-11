@@ -55,16 +55,24 @@ class SettingsRepo:
         )
         return result.scalar_one_or_none()
 
-    async def set_channel(self, channel_id: int, channel_name: str = "") -> None:
-        # Deactivate all existing
-        await self.session.execute(
-            update(ChannelSetting).values(is_active=False)
+    async def get_all_channels(self) -> Sequence[ChannelSetting]:
+        result = await self.session.execute(
+            select(ChannelSetting).order_by(ChannelSetting.id.asc())
         )
+        return result.scalars().all()
+
+    async def set_channel(self, channel_id: int, channel_name: str = "", channel_url: str = "", emoji: str = "📢") -> None:
         self.session.add(ChannelSetting(
             channel_id=channel_id,
             channel_name=channel_name,
+            channel_url=channel_url,
+            emoji=emoji,
             is_active=True,
         ))
+        await self.session.flush()
+
+    async def clear_channels(self) -> None:
+        await self.session.execute(delete(ChannelSetting))
         await self.session.flush()
 
 
@@ -233,10 +241,31 @@ class AdminRepo:
         )
         return result.scalar_one() > 0
 
-    async def ensure_admin(self, telegram_id: int, username: str = "") -> None:
+    async def ensure_admin(self, telegram_id: int, username: str = "", role: str = "super_admin") -> None:
         existing = await self.session.execute(
             select(AdminUser).where(AdminUser.telegram_id == telegram_id)
         )
         if not existing.scalar_one_or_none():
-            self.session.add(AdminUser(telegram_id=telegram_id, username=username, role="super_admin"))
+            self.session.add(AdminUser(telegram_id=telegram_id, username=username, role=role))
             await self.session.flush()
+
+    async def add_admin(self, telegram_id: int, username: str = "", added_by: int | None = None) -> bool:
+        """Add a sub-admin. Returns True if added, False if already exists."""
+        if await self.is_admin(telegram_id):
+            return False
+        admin = AdminUser(telegram_id=telegram_id, username=username, role="admin", added_by=added_by)
+        self.session.add(admin)
+        await self.session.flush()
+        return True
+
+    async def remove_admin(self, telegram_id: int) -> bool:
+        """Remove a sub-admin. Returns True if removed, False if not found."""
+        result = await self.session.execute(
+            delete(AdminUser).where(AdminUser.telegram_id == telegram_id).returning(AdminUser.id)
+        )
+        await self.session.flush()
+        return bool(result.scalars().first())
+
+    async def get_all_admins(self) -> Sequence[AdminUser]:
+        result = await self.session.execute(select(AdminUser).order_by(AdminUser.created_at.asc()))
+        return result.scalars().all()

@@ -33,6 +33,20 @@ async def bot_settings_menu(callback: CallbackQuery, session: AsyncSession):
     )
     await callback.answer()
 
+@router.callback_query(F.data == "admin:toggle_verification")
+async def toggle_verification(callback: CallbackQuery, session: AsyncSession):
+    if not callback.message:
+        return
+    settings_repo = SettingsRepo(session)
+    v_status_str = await settings_repo.get("verification_enabled")
+    current_status = (v_status_str or "true").lower() == "true"
+    new_status = not current_status
+    await settings_repo.set("verification_enabled", "true" if new_status else "false")
+    
+    # Reload admin panel
+    from bot.keyboards.admin_kb import admin_main_menu
+    await callback.message.edit_reply_markup(reply_markup=admin_main_menu(new_status))
+    await callback.answer(f"Verification turned {'ON' if new_status else 'OFF'}!")
 
 @router.callback_query(F.data.regexp(r"^admin:set:(\w+)$"))
 async def edit_setting(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
@@ -47,6 +61,8 @@ async def edit_setting(callback: CallbackQuery, state: FSMContext, session: Asyn
         "welcome_message": "👋 Welcome Message",
         "approval_message": "✅ Approval Message",
         "decline_message": "❌ Decline Message",
+        "ban_message": "🚫 Ban Message",
+        "disclaimer": "📜 Disclaimer",
     }
 
     await state.update_data(setting_key=key)
@@ -57,7 +73,6 @@ async def edit_setting(callback: CallbackQuery, state: FSMContext, session: Asyn
     )
     await state.set_state(AdminSettingStates.waiting_value)
     await callback.answer()
-
 
 @router.message(AdminSettingStates.waiting_value)
 async def save_setting(message: Message, state: FSMContext, session: AsyncSession):
@@ -76,9 +91,8 @@ async def save_setting(message: Message, state: FSMContext, session: AsyncSessio
         reply_markup=admin_back_button(),
     )
 
-
 # ── Support Settings ──
-@router.callback_query(F.data == "admin:support")
+@router.callback_query(F.data == "admin:support_setup")
 async def support_settings(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     if not callback.message:
         return
@@ -89,80 +103,38 @@ async def support_settings(callback: CallbackQuery, state: FSMContext, session: 
         "╔══════════════════════════════╗\n"
         "    💬  <b>SUPPORT SETTINGS</b>\n"
         "╚══════════════════════════════╝\n\n"
-        f"Current:\n<i>{current[:500]}</i>\n\n"
+        f"Current text:\n<i>{current[:500]}</i>\n\n"
         "Enter new support text:\n",
     )
     await state.update_data(setting_key="support_text")
     await state.set_state(AdminSettingStates.waiting_value)
     await callback.answer()
 
-
-# ── Ban Message ──
-@router.callback_query(F.data == "admin:ban_msg")
-async def ban_msg_settings(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
-    if not callback.message:
-        return
-    settings_repo = SettingsRepo(session)
-    current = await settings_repo.get("ban_message") or "Not configured"
-
-    await callback.message.edit_text(
-        "╔══════════════════════════════╗\n"
-        "    🚫  <b>BAN MESSAGE</b>\n"
-        "╚══════════════════════════════╝\n\n"
-        f"Current:\n<i>{current[:500]}</i>\n\n"
-        "Enter the new ban message:\n",
-    )
-    await state.update_data(setting_key="ban_message")
-    await state.set_state(AdminSettingStates.waiting_value)
-    await callback.answer()
-
-
-# ── Disclaimer ──
-@router.callback_query(F.data == "admin:disclaimer")
-async def disclaimer_settings(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
-    if not callback.message:
-        return
-    settings_repo = SettingsRepo(session)
-    current = await settings_repo.get("disclaimer_text") or "Not configured"
-
-    await callback.message.edit_text(
-        "╔══════════════════════════════╗\n"
-        "    📜  <b>DISCLAIMER</b>\n"
-        "╚══════════════════════════════╝\n\n"
-        f"Current:\n<i>{current[:500]}</i>\n\n"
-        "Enter the new disclaimer text:\n",
-    )
-    await state.update_data(setting_key="disclaimer_text")
-    await state.set_state(AdminSettingStates.waiting_value)
-    await callback.answer()
-
-
 # ── Channel Settings ──
-@router.callback_query(F.data == "admin:channel")
+@router.callback_query(F.data == "admin:channels")
 async def channel_settings(callback: CallbackQuery, state: FSMContext, session: AsyncSession):
     if not callback.message:
         return
     settings_repo = SettingsRepo(session)
-    channel = await settings_repo.get_active_channel()
+    channels = await settings_repo.get_all_channels()
 
-    current_info = (
-        f"Channel ID: <code>{channel.channel_id}</code>\n"
-        f"Name: {channel.channel_name or 'N/A'}\n"
-    ) if channel else "No channel configured."
+    if channels:
+        current_info = "\n".join(f"{ch.emoji} {ch.channel_name} (ID: <code>{ch.channel_id}</code>)" for ch in channels)
+    else:
+        current_info = "No channels configured."
 
     await callback.message.edit_text(
         "╔══════════════════════════════╗\n"
         "    📡  <b>CHANNEL SETTINGS</b>\n"
         "╚══════════════════════════════╝\n\n"
         f"Current:\n{current_info}\n\n"
-        "Enter the <b>channel/chat ID</b>:\n\n"
+        "To add/update a channel, enter the <b>channel/chat ID</b>:\n\n"
         "<i>Example: -1001234567890\n"
         "Forward a message from the channel\n"
         "to @userinfobot to get the ID.</i>\n",
     )
     await state.set_state(AdminSettingStates.waiting_channel_id)
     await callback.answer()
-
 
 @router.message(AdminSettingStates.waiting_channel_id)
 async def save_channel_id(message: Message, state: FSMContext, session: AsyncSession):
@@ -176,11 +148,11 @@ async def save_channel_id(message: Message, state: FSMContext, session: AsyncSes
         return
 
     settings_repo = SettingsRepo(session)
-    await settings_repo.set_channel(channel_id, f"Channel {channel_id}")
+    await settings_repo.set_channel(channel_id, f"Channel {channel_id}", emoji="📢")
 
     await state.clear()
     await message.answer(
-        f"✅ <b>Channel Updated!</b>\n\n"
+        f"✅ <b>Channel Added/Updated!</b>\n\n"
         f"Channel ID: <code>{channel_id}</code>\n\n"
         "<i>Make sure the bot is an admin in this channel.</i>\n",
         reply_markup=admin_back_button(),

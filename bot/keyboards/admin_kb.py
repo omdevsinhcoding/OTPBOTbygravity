@@ -8,37 +8,47 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from bot.db.models import Service, User
 
 
-def admin_main_menu() -> InlineKeyboardMarkup:
-    """Admin panel home — premium grid layout."""
+def admin_main_menu(verification_status: bool = True) -> InlineKeyboardMarkup:
+    """Admin panel home — premium 18-button grid layout."""
+    v_toggle = "🟢 Verification ON" if verification_status else "🔴 Verification OFF"
+    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="📊 Dashboard", callback_data="admin:dashboard"),
-            InlineKeyboardButton(text="👥 All Users", callback_data="admin:users:all"),
+            InlineKeyboardButton(text="👑 Admins Management", callback_data="admin:manage_admins"),
         ],
         [
-            InlineKeyboardButton(text="✅ Verified", callback_data="admin:users:verified"),
-            InlineKeyboardButton(text="⏳ Pending", callback_data="admin:users:pending"),
+            InlineKeyboardButton(text="🛍️ Pending Orders", callback_data="admin:users:pending"),
+            InlineKeyboardButton(text="👥 Total Users", callback_data="admin:users:all"),
         ],
         [
-            InlineKeyboardButton(text="❌ Declined", callback_data="admin:users:declined"),
-            InlineKeyboardButton(text="🚫 Banned", callback_data="admin:users:banned"),
+            InlineKeyboardButton(text="✅ Active Users", callback_data="admin:users:approved"),
+            InlineKeyboardButton(text="🎬 Services Setup", callback_data="admin:services"),
         ],
         [
-            InlineKeyboardButton(text="🎬 Services", callback_data="admin:services"),
-            InlineKeyboardButton(text="📢 Broadcast", callback_data="admin:broadcast"),
+            InlineKeyboardButton(text="⚙️ Bot Settings", callback_data="admin:settings"),
+            InlineKeyboardButton(text=v_toggle, callback_data="admin:toggle_verification"),
+        ],
+        [
+            InlineKeyboardButton(text="📢 Setup Channels", callback_data="admin:channels"),
+            InlineKeyboardButton(text="🆘 Setup Support", callback_data="admin:support_setup"),
+        ],
+        [
+            InlineKeyboardButton(text="✉️ Send Mass Message", callback_data="admin:broadcast"),
+            InlineKeyboardButton(text="👋 Welcome Message", callback_data="admin:set:welcome_message"),
         ],
         [
             InlineKeyboardButton(text="📈 Analytics", callback_data="admin:analytics"),
-            InlineKeyboardButton(text="⚙️ Bot Settings", callback_data="admin:settings"),
+            InlineKeyboardButton(text="🚫 Ban Message", callback_data="admin:set:ban_message"),
         ],
         [
-            InlineKeyboardButton(text="💬 Support", callback_data="admin:support"),
-            InlineKeyboardButton(text="🚫 Ban Message", callback_data="admin:ban_msg"),
+            InlineKeyboardButton(text="✅ Approval Message", callback_data="admin:set:approval_message"),
+            InlineKeyboardButton(text="❌ Decline Message", callback_data="admin:set:decline_message"),
         ],
         [
-            InlineKeyboardButton(text="📜 Disclaimer", callback_data="admin:disclaimer"),
-            InlineKeyboardButton(text="📡 Channel", callback_data="admin:channel"),
-        ],
+            InlineKeyboardButton(text="📜 Disclaimer", callback_data="admin:set:disclaimer"),
+            InlineKeyboardButton(text="🏠 Close Panel", callback_data="main_menu"),
+        ]
     ])
 
 

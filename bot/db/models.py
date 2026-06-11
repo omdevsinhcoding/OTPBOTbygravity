@@ -126,6 +126,7 @@ class UserServiceAssignment(Base):
     service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False)
     assigned_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="service_assignments")
     service: Mapped["Service"] = relationship()
@@ -189,8 +190,26 @@ class ChannelSetting(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     channel_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    channel_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    emoji: Mapped[str] = mapped_column(String(10), default="📢")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+# ──────────────────────────────────────────────
+#  OTP LOGS (For Recent Viewed OTPs)
+# ──────────────────────────────────────────────
+class OTPLog(Base):
+    __tablename__ = "otp_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    service_id: Mapped[int] = mapped_column(Integer, ForeignKey("services.id", ondelete="CASCADE"), nullable=False)
+    otp_value: Mapped[str] = mapped_column(String(50), nullable=False)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+    user: Mapped["User"] = relationship()
+    service: Mapped["Service"] = relationship()
 
 
 # ──────────────────────────────────────────────

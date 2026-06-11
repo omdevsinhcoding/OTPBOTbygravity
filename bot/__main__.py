@@ -15,6 +15,7 @@ from bot.loader import bot, dp
 
 # ── Import routers ──
 from bot.handlers.start import router as start_router
+from bot.handlers.menu import router as menu_router
 from bot.handlers.registration import router as registration_router
 from bot.handlers.otp import router as otp_router
 from bot.handlers.reapply import router as reapply_router
@@ -95,6 +96,7 @@ async def main():
     # ── Register all routers ──
     dp.include_router(admin_router)
     dp.include_router(start_router)
+    dp.include_router(menu_router)
     dp.include_router(registration_router)
     dp.include_router(otp_router)
     dp.include_router(reapply_router)

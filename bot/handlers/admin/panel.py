@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.db.models import Service, User, UserServiceAssignment
-from bot.db.repositories.settings_repo import AuditRepo
+from bot.db.repositories.settings_repo import SettingsRepo, AuditRepo
 from bot.db.repositories.user_repo import UserRepo
 from bot.keyboards.admin_kb import admin_main_menu, admin_back_button
 from bot.messages.admin_msgs import dashboard_message, analytics_message
@@ -21,16 +21,19 @@ from bot.messages.admin_msgs import dashboard_message, analytics_message
 logger = logging.getLogger(__name__)
 router = Router(name="admin_panel")
 
-
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, session: AsyncSession):
     """Open admin panel."""
+    settings_repo = SettingsRepo(session)
+    v_status_str = await settings_repo.get("verification_enabled")
+    v_status = (v_status_str or "true").lower() == "true"
+    
     await message.answer(
         "╔══════════════════════════════╗\n"
         "    🛡️  <b>ADMIN PANEL</b>\n"
         "╚══════════════════════════════╝\n\n"
         "Welcome, Admin! Choose an option:\n",
-        reply_markup=admin_main_menu(),
+        reply_markup=admin_main_menu(v_status),
     )
 
 
@@ -39,12 +42,17 @@ async def admin_home(callback: CallbackQuery, session: AsyncSession):
     """Return to admin main menu."""
     if not callback.message:
         return
+        
+    settings_repo = SettingsRepo(session)
+    v_status_str = await settings_repo.get("verification_enabled")
+    v_status = (v_status_str or "true").lower() == "true"
+    
     await callback.message.edit_text(
         "╔══════════════════════════════╗\n"
         "    🛡️  <b>ADMIN PANEL</b>\n"
         "╚══════════════════════════════╝\n\n"
         "Welcome, Admin! Choose an option:\n",
-        reply_markup=admin_main_menu(),
+        reply_markup=admin_main_menu(v_status),
     )
     await callback.answer()
 
