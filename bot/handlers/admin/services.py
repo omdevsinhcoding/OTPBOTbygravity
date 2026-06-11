@@ -87,95 +87,59 @@ async def create_service_start(callback: CallbackQuery, state: FSMContext):
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "  ➕ <b>Create New Service</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Step 1: Enter the <b>service name</b>\n\n"
-        "<i>Example: Netflix, Sony LIV, Hotstar</i>\n"
+        "Just enter the <b>Service Name</b> and I'll configure the rest!\n\n"
+        "<i>Example: Netflix, Hotstar, SonyLIV</i>\n"
     )
     await state.set_state(AdminServiceStates.waiting_name)
     await callback.answer()
 
 
 @router.message(AdminServiceStates.waiting_name)
-async def process_service_name(message: Message, state: FSMContext):
+async def process_service_name(message: Message, state: FSMContext, session: AsyncSession):
     if not message.text:
         return
-    await state.update_data(name=message.text.strip())
-    await message.answer(
-        "Step 2: Enter the <b>display name</b>\n"
-        "(or send /skip to use the same name)\n\n"
-        "<i>Example: 🎬 Netflix Premium</i>"
-    )
-    await state.set_state(AdminServiceStates.waiting_display_name)
-
-
-@router.message(AdminServiceStates.waiting_display_name)
-async def process_display_name(message: Message, state: FSMContext):
-    if not message.text:
-        return
-    data = await state.get_data()
-    display = message.text.strip() if message.text.strip() != "/skip" else data["name"]
-    await state.update_data(display_name=display)
-    await message.answer(
-        "Step 3: Enter <b>SMS keywords</b> (comma-separated)\n"
-        "These are used to match incoming SMS.\n\n"
-        "<i>Example: netflix, nflx</i>"
-    )
-    await state.set_state(AdminServiceStates.waiting_keywords)
-
-
-@router.message(AdminServiceStates.waiting_keywords)
-async def process_keywords(message: Message, state: FSMContext):
-    if not message.text:
-        return
-    keywords = [k.strip().lower() for k in message.text.split(",") if k.strip()]
-    await state.update_data(keywords=keywords)
-    await message.answer(
-        "Step 4: Enter <b>sender patterns</b> (comma-separated)\n"
-        "These match the SMS sender ID.\n\n"
-        "<i>Example: 56161878, NFLIX</i>\n"
-        "Send /skip if none."
-    )
-    await state.set_state(AdminServiceStates.waiting_sender_patterns)
-
-
-@router.message(AdminServiceStates.waiting_sender_patterns)
-async def process_sender_patterns(message: Message, state: FSMContext):
-    if not message.text:
-        return
-    if message.text.strip() == "/skip":
-        senders = []
-    else:
-        senders = [s.strip() for s in message.text.split(",") if s.strip()]
-    await state.update_data(sender_patterns=senders)
-    await message.answer(
-        "Step 5: Enter an <b>emoji</b> for this service\n\n"
-        "<i>Example: 🎬, 📺, 🎯</i>\n"
-        "Send /skip for default 📦"
-    )
-    await state.set_state(AdminServiceStates.waiting_emoji)
-
-
-@router.message(AdminServiceStates.waiting_emoji)
-async def process_emoji(message: Message, state: FSMContext, session: AsyncSession):
-    if not message.text:
-        return
-    emoji = message.text.strip() if message.text.strip() != "/skip" else "📦"
-    data = await state.get_data()
+        
+    raw_name = message.text.strip()
+    
+    # Smart auto-configuration
+    name_clean = raw_name.lower().replace(" ", "")
+    display_name = raw_name.title()
+    
+    # Generate keywords based on the name (e.g. "SonyLIV" -> "sonyliv", "sony")
+    keywords = [name_clean]
+    if " " in raw_name:
+        keywords.extend([part.lower() for part in raw_name.split()])
+    
+    # Add common variations
+    if "hotstar" in name_clean:
+        keywords.append("jiohotstar")
+    
+    # Guess emoji based on keywords
+    emoji = "📦"
+    if any(k in name_clean for k in ["netflix", "hotstar", "sonyliv", "prime", "movie", "tv", "video"]):
+        emoji = "🎬"
+    elif any(k in name_clean for k in ["whatsapp", "telegram", "chat", "message"]):
+        emoji = "💬"
+    elif any(k in name_clean for k in ["insta", "snap", "facebook", "twitter", "social"]):
+        emoji = "📱"
+    elif any(k in name_clean for k in ["google", "microsoft", "apple", "mail"]):
+        emoji = "🌐"
 
     service_repo = ServiceRepo(session)
     service = await service_repo.create(
-        name=data["name"],
-        display_name=data.get("display_name"),
-        keywords=data.get("keywords"),
-        sender_patterns=data.get("sender_patterns"),
+        name=name_clean,
+        display_name=display_name,
+        keywords=keywords,
+        sender_patterns=[],
         emoji=emoji,
     )
 
     await state.clear()
     await message.answer(
-        f"✅ <b>Service Created!</b>\n\n"
-        f"{emoji} <b>{service.display_name or service.name}</b>\n"
-        f"🔍 Keywords: {', '.join(service.keywords or [])}\n"
-        f"📡 Senders: {', '.join(service.sender_patterns or [])}\n",
+        f"✅ <b>Service Auto-Created!</b>\n\n"
+        f"{emoji} <b>{service.display_name}</b>\n"
+        f"🔍 Auto-Keywords: {', '.join(service.keywords or [])}\n\n"
+        f"<i>(You can edit these from the Services menu if needed)</i>",
         reply_markup=admin_back_button(),
     )
 
