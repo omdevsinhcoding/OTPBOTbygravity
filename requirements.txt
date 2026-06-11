@@ -1,0 +1,21 @@
+# === Telegram Bot ===
+aiogram>=3.15.0
+# aiohttp is pulled by aiogram — do not pin separately
+
+# === Database ===
+sqlalchemy[asyncio]>=2.0.36
+asyncpg>=0.30.0
+alembic>=1.14.0
+greenlet>=3.1.1
+
+# === HTTP Client ===
+httpx>=0.28.0
+
+# === Config ===
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+
+# === Utilities ===
+python-dotenv>=1.0.1
+pytz>=2024.2
+
