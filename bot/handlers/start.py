@@ -23,6 +23,7 @@ from bot.keyboards.user_kb import (
     reapply_keyboard,
     verify_link_keyboard,
     refresh_status_keyboard,
+    restart_keyboard,
 )
 from bot.messages.user_msgs import (
     already_verified_message,
@@ -35,6 +36,7 @@ from bot.messages.user_msgs import (
     welcome_message,
     verification_success,
     session_expired_message,
+    verification_failed,
 )
 from bot.services.verification import generate_verification_token
 from bot.states.registration import RegistrationStates
