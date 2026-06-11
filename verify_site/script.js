@@ -10,8 +10,10 @@
  */
 
 // ── Configuration ──
-// Set this to your VPS IP/domain where the bot runs.
-const API_BASE = "http://161.118.182.184:8080";
+// API_BASE is empty = calls go to same Netlify domain (e.g., /api/session)
+// Netlify's _redirects file proxies /api/* to your VPS automatically.
+// This fixes HTTPS mixed content and hides your VPS IP from the browser.
+const API_BASE = "";
 
 // Extract token from URL
 const urlParams = new URLSearchParams(window.location.search);
